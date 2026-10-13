@@ -1,0 +1,29 @@
+{
+  "name": "fma-skill",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"scripts/**/*.test.mjs\" \"tests/**/*.test.mjs\"",
+    "validate": "node scripts/validate-skill.mjs skills/fma",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "devDependencies": {
+    "@softarc/sheriff-core": "^0.20.0",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "dependency-cruiser": "^18.6.0",
+    "eslint": "^10.12.0",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0",
+    "prettier": "^3.9.10",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-eslint": "^8.71.1",
+    "vitepress": "^1.6.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hooter/fma-skill.git"
+  },
+  "homepage": "https://hooter.github.io/fma-skill/"
+}

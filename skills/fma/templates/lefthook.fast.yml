@@ -1,0 +1,18 @@
+# Fast profile: oxfmt + oxlint. Copy to the project root as lefthook.yml.
+# Install: pnpm add -D lefthook && pnpm exec lefthook install
+# The baseline profile (Prettier + ESLint) is lefthook.yml.
+# arch:check checks the whole graph, not just the changed files: module boundaries cannot be
+# judged from a list of staged files. CI repeats the same commands without filtering.
+# arch:check runs with --linter oxlint (see enforcement.md).
+pre-commit:
+  parallel: false
+  commands:
+    format:
+      glob: "*.{ts,js,mjs,cjs,json,css}"
+      run: pnpm exec oxfmt {staged_files}
+      stage_fixed: true
+    lint:
+      glob: "*.{ts,js,mjs,cjs}"
+      run: pnpm exec oxlint -c .oxlintrc.json {staged_files}
+    arch:
+      run: pnpm run arch:check

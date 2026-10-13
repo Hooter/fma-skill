@@ -1,0 +1,157 @@
+// Copy to apps/<app>/.dependency-cruiser.cjs. Run with cwd = apps/<app>.
+// Domain root: NestJS — 'src' (default), Angular — 'src/app' (FMA_SRC_ROOT=src/app).
+// Regular expressions avoid nested quantifiers: dependency-cruiser considers them unsafe.
+const fs = require('node:fs');
+const path = require('node:path');
+
+const ROOT = process.env.FMA_SRC_ROOT || 'src';
+const NON_DOMAINS = new Set(['shared', 'contracts']);
+const TS = '\\.tsx?$';
+const INDEX = `/index${TS}`;
+const NPM_FRAMEWORKS = '(^|node_modules/)(@nestjs|@angular|typeorm|@prisma|drizzle-orm|rxjs)';
+const NPM_ORM = '(^|node_modules/)(typeorm|@nestjs/typeorm|@prisma|drizzle-orm|mongoose)';
+
+const dirs = (p) =>
+  fs.existsSync(p) ? fs.readdirSync(p, { withFileTypes: true }).filter((d) => d.isDirectory()) : [];
+
+// The rich tier = the module has a domain/ folder (even an empty one). Domains and their _submodules are considered.
+const richModules = [];
+for (const d of dirs(ROOT).filter((x) => !NON_DOMAINS.has(x.name))) {
+  if (fs.existsSync(path.join(ROOT, d.name, 'domain'))) richModules.push(d.name);
+  for (const sub of dirs(path.join(ROOT, d.name)).filter((x) => x.name.startsWith('_'))) {
+    if (fs.existsSync(path.join(ROOT, d.name, sub.name, 'domain')))
+      richModules.push(`${d.name}/${sub.name}`);
+  }
+}
+
+const UI_DIRS = [`^${ROOT}/[^/]+/ui/`, `^${ROOT}/[^/]+/.*/ui/`];
+const DOMAIN_DIRS = [`^${ROOT}/[^/]+/domain/`, `^${ROOT}/[^/]+/.*/domain/`];
+
+module.exports = {
+  forbidden: [
+    {
+      name: 'no-circular',
+      severity: 'error',
+      comment: 'Cycles between modules are forbidden (FMA).',
+      from: {},
+      to: { circular: true },
+    },
+    {
+      name: 'no-deep-import',
+      severity: 'error',
+      comment:
+        'A neighbor is visible only through index.ts (FMA); a public submodule — through the parent index.',
+      from: { path: `^${ROOT}/([^/]+)/`, pathNot: `^${ROOT}/(shared|contracts)/` },
+      to: {
+        path: `^${ROOT}/[^/]+/`,
+        pathNot: [`^${ROOT}/$1/`, `^${ROOT}/(shared|contracts)/`, `^${ROOT}/[^/]+${INDEX}`],
+      },
+    },
+    {
+      name: 'no-deep-shared',
+      severity: 'error',
+      comment: 'A shared segment is reachable only through its own index.ts (FMA).',
+      from: { path: `^${ROOT}/`, pathNot: `^${ROOT}/shared/` },
+      to: { path: `^${ROOT}/shared/[^/]+/`, pathNot: `^${ROOT}/shared/[^/]+${INDEX}` },
+    },
+    {
+      name: 'shared-no-domain',
+      severity: 'error',
+      comment: 'shared does not depend on domains (FMA).',
+      from: { path: `^${ROOT}/shared/` },
+      to: { path: `^${ROOT}/[^/]+/`, pathNot: [`^${ROOT}/shared/`, `^${ROOT}/contracts/`] },
+    },
+    {
+      name: 'child-no-parent',
+      severity: 'error',
+      comment:
+        'A _submodule does not import files of its parent (FMA: child → parent is forbidden).',
+      from: { path: `^${ROOT}/([^/]+)/_[^/]+/` },
+      to: { path: `^${ROOT}/$1/[^/]+${TS}` },
+    },
+    {
+      name: 'sibling-sub-deep',
+      severity: 'error',
+      comment: 'The _submodules of one domain reach each other only through index.ts.',
+      from: { path: `^${ROOT}/([^/]+)/(_[^/]+)/` },
+      to: {
+        path: `^${ROOT}/$1/_[^/]+/`,
+        pathNot: [`^${ROOT}/$1/$2/`, `^${ROOT}/$1/_[^/]+${INDEX}`],
+      },
+    },
+    {
+      name: 'ui-no-data',
+      severity: 'error',
+      comment: 'ui and page do not import api, model, repository or shared/data; only state (FMA).',
+      from: { path: [...UI_DIRS, `^${ROOT}/[^/]+/.*\\.page\\.ts$`] },
+      to: { path: [`^${ROOT}/[^/]+/.*\\.(api|model|repository)\\.ts$`, `^${ROOT}/shared/data/`] },
+    },
+    {
+      name: 'lower-no-ui',
+      severity: 'error',
+      comment: 'api, model and repo do not import ui or state (FMA).',
+      from: {
+        path: `^${ROOT}/[^/]+/.*\\.(api|model|repository|service|controller|consumer|resolver|facade|policy)\\.ts$`,
+      },
+      to: { path: [...UI_DIRS, `^${ROOT}/[^/]+/.*\\.(state|page)\\.ts$`] },
+    },
+    {
+      name: 'state-no-ui',
+      severity: 'error',
+      comment: 'state does not import ui or page (FMA).',
+      from: { path: `^${ROOT}/[^/]+/.*\\.state\\.ts$` },
+      to: { path: [...UI_DIRS, `^${ROOT}/[^/]+/.*\\.page\\.ts$`] },
+    },
+    {
+      name: 'service-no-controller',
+      severity: 'error',
+      comment:
+        'service, facade and repository do not import controller, consumer or resolver (FMA).',
+      from: { path: `^${ROOT}/[^/]+/.*\\.(service|facade|repository)\\.ts$` },
+      to: { path: `^${ROOT}/[^/]+/.*\\.(controller|consumer|resolver)\\.ts$` },
+    },
+    {
+      name: 'domain-pure',
+      severity: 'error',
+      comment: 'domain is pure TS: no framework, no ORM (FMA, rich tier).',
+      from: { path: DOMAIN_DIRS },
+      to: { path: NPM_FRAMEWORKS },
+    },
+    {
+      name: 'domain-isolated',
+      severity: 'error',
+      comment: 'domain imports only its own domain/ and shared/util (FMA).',
+      from: { path: `^${ROOT}/([^/]+)/domain/` },
+      to: { path: `^${ROOT}/[^/]+/`, pathNot: [`^${ROOT}/$1/domain/`, `^${ROOT}/shared/util/`] },
+    },
+    {
+      name: 'domain-isolated',
+      severity: 'error',
+      comment: 'The domain of a submodule imports only its own domain/ and shared/util (FMA).',
+      from: { path: `^${ROOT}/([^/]+)/([^/]+)/domain/` },
+      to: { path: `^${ROOT}/[^/]+/`, pathNot: [`^${ROOT}/$1/$2/domain/`, `^${ROOT}/shared/util/`] },
+    },
+    ...richModules.flatMap((m) => [
+      {
+        name: `rich-model-no-repo:${m}`,
+        severity: 'error',
+        comment: `In the rich module ${m}, service reaches storage only through a port (FMA).`,
+        from: { path: `^${ROOT}/${m}/.*\\.service\\.ts$` },
+        to: { path: `^${ROOT}/${m}/.*\\.repository\\.ts$` },
+      },
+      {
+        name: `rich-model-no-orm:${m}`,
+        severity: 'error',
+        comment: `In the rich module ${m}, service does not use the ORM or entities directly (FMA).`,
+        from: { path: `^${ROOT}/${m}/.*\\.service\\.ts$` },
+        to: { path: [NPM_ORM, `^${ROOT}/${m}/.*\\.entity\\.ts$`] },
+      },
+    ]),
+  ],
+  options: {
+    tsPreCompilationDeps: true,
+    ...(fs.existsSync('tsconfig.json') ? { tsConfig: { fileName: 'tsconfig.json' } } : {}),
+    doNotFollow: { path: 'node_modules' },
+    exclude: { path: '\\.(spec|test)\\.ts$' },
+  },
+};

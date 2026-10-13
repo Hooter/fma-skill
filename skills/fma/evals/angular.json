@@ -1,0 +1,87 @@
+[
+  {
+    "id": "ng-simple-domain",
+    "prompt": "Create a \"product catalog\" domain in apps/web with a list and a detail card. There are no business invariants.",
+    "expect": {
+      "mentions": [
+        "simple",
+        "index.ts",
+        "catalog.state.ts",
+        "catalog.api.ts",
+        "@contracts/catalog"
+      ],
+      "forbid": [
+        "domain/",
+        "export *",
+        "controller",
+        "+page.server.ts"
+      ],
+      "runsArchCheck": true
+    }
+  },
+  {
+    "id": "ng-rich-domain",
+    "prompt": "Create a \"cart\" domain in apps/web: discounts depend on the set of items and coupons, and the rules must be testable without HTTP.",
+    "expect": {
+      "mentions": [
+        "rich",
+        "domain/",
+        "port",
+        "index.ts"
+      ],
+      "forbid": [
+        "export *",
+        "providedIn: 'root'"
+      ],
+      "runsArchCheck": true
+    }
+  },
+  {
+    "id": "ng-subdomain",
+    "prompt": "The cart domain needs a \"cart items\" submodule that is used only inside cart.",
+    "expect": {
+      "mentions": [
+        "_items",
+        "internal",
+        "index.ts"
+      ],
+      "forbid": [
+        "export *",
+        "public submodule"
+      ],
+      "runsArchCheck": true
+    }
+  },
+  {
+    "id": "ng-review-violation",
+    "prompt": "Review this code: orders.state.ts contains `import { CartState } from '@app/cart/cart.state'`.",
+    "expect": {
+      "mentions": [
+        "index.ts",
+        "no-restricted-imports",
+        "bypass"
+      ],
+      "forbid": [
+        "acceptable"
+      ],
+      "runsArchCheck": true
+    }
+  },
+  {
+    "id": "ng-cross-domain-ui",
+    "prompt": "The orders page needs to show the cart badge from the cart domain.",
+    "expect": {
+      "mentions": [
+        "showcase",
+        "index.ts",
+        "inputs"
+      ],
+      "forbid": [
+        "from '@app/cart/",
+        "from '../cart/",
+        "export *"
+      ],
+      "runsArchCheck": false
+    }
+  }
+]

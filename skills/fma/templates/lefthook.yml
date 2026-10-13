@@ -1,0 +1,17 @@
+# Baseline profile: Prettier + ESLint. Copy to the project root as lefthook.yml.
+# Install: pnpm add -D lefthook && pnpm exec lefthook install
+# The fast profile (oxfmt + oxlint) is lefthook.fast.yml.
+# arch:check checks the whole graph, not just the changed files: module boundaries cannot be
+# judged from a list of staged files. CI repeats the same commands without filtering.
+pre-commit:
+  parallel: false
+  commands:
+    format:
+      glob: "*.{ts,js,mjs,cjs,json,css,html}"
+      run: pnpm exec prettier --write {staged_files}
+      stage_fixed: true
+    lint:
+      glob: "*.{ts,mts,cts}"
+      run: pnpm exec eslint -c eslint.config.mjs {staged_files}
+    arch:
+      run: pnpm run arch:check

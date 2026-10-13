@@ -1,0 +1,108 @@
+[
+  {
+    "id": "nest-simple-domain",
+    "prompt": "Create a \"currency directory\" domain in apps/api with CRUD. There are no invariants.",
+    "expect": {
+      "mentions": [
+        "simple",
+        "currency.module.ts",
+        "currency.service.ts",
+        "currency.repository.ts",
+        "exports"
+      ],
+      "forbid": [
+        "domain/",
+        "export *",
+        "forwardRef"
+      ],
+      "runsArchCheck": true
+    }
+  },
+  {
+    "id": "nest-rich-domain",
+    "prompt": "Create an \"order\" domain in apps/api: statuses and transitions between them, the total depends on the line items, and the rules must be testable without a DB.",
+    "expect": {
+      "mentions": [
+        "rich",
+        "domain/",
+        "ports/",
+        "provide",
+        "useClass"
+      ],
+      "forbid": [
+        "export *",
+        "@Injectable in domain"
+      ],
+      "runsArchCheck": true
+    }
+  },
+  {
+    "id": "nest-subdomain",
+    "prompt": "In the cart domain add a public checkout submodule with its own controller.",
+    "expect": {
+      "mentions": [
+        "checkout/",
+        "imports",
+        "controller"
+      ],
+      "forbid": [
+        "_checkout",
+        "export *"
+      ],
+      "runsArchCheck": true
+    }
+  },
+  {
+    "id": "nest-cross-domain-call",
+    "prompt": "The orders service needs a cart summary from the cart domain.",
+    "expect": {
+      "mentions": [
+        "CartModule",
+        "CartFacade",
+        "exports",
+        "port"
+      ],
+      "forbid": [
+        "from '@app/cart/",
+        "from '../cart/",
+        "HTTP request"
+      ],
+      "runsArchCheck": true
+    }
+  },
+  {
+    "id": "nest-review-violation",
+    "prompt": "Review this code: in orders.service.ts `import { CartService } from '../cart/cart.service'`.",
+    "expect": {
+      "mentions": [
+        "no-deep-import",
+        "index.ts",
+        "CartFacade"
+      ],
+      "forbid": [
+        "acceptable"
+      ],
+      "runsArchCheck": true
+    }
+  },
+  {
+    "id": "nest-consumer-outbox",
+    "prompt": "When an item is added to the cart, the cart.item-added event must be published to Kafka, and the orders service must react to it.",
+    "expect": {
+      "mentions": [
+        "EventPublisher",
+        "outbox",
+        "consumer",
+        "idempot",
+        "cart.item-added",
+        "libs/contracts",
+        "shared/events"
+      ],
+      "forbid": [
+        "export *",
+        "KafkaProducer in service"
+      ],
+      "runsArchCheck": true
+    }
+  }
+]

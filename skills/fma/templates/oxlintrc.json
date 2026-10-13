@@ -1,0 +1,29 @@
+{
+  "plugins": ["import", "typescript"],
+  "rules": {
+    "import/no-cycle": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@nestjs/common",
+            "importNames": ["forwardRef"],
+            "message": "forwardRef is a module boundary violation (FMA): revisit the boundary."
+          },
+          {
+            "name": "@angular/core",
+            "importNames": ["forwardRef"],
+            "message": "forwardRef is a module boundary violation (FMA): revisit the boundary."
+          }
+        ],
+        "patterns": [
+          {
+            "regex": "^@(app|contracts|shared)/[^/]+/.+",
+            "message": "Importing past a neighbor module's public entry point (index.ts) is forbidden (FMA)."
+          }
+        ]
+      }
+    ]
+  }
+}
