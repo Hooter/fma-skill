@@ -1,6 +1,7 @@
 {
   "name": "fma-skill",
   "private": true,
+  "packageManager": "pnpm@10.29.3",
   "type": "module",
   "scripts": {
     "test": "node --test \"scripts/**/*.test.mjs\" \"tests/**/*.test.mjs\"",
