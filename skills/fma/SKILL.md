@@ -116,6 +116,7 @@ FMA is not suitable for trivial applications without a backend, or when full DDD
 - Transports and microservices: `references/transport.md`
 - Rule enforcement: baseline profile (ESLint, Prettier) and fast profile (oxlint, oxfmt, TypeScript 7), Sheriff, dependency-cruiser, hook: `references/enforcement.md`
 - Migrating from the original FDA: `references/migration.md`
+- Migrating from Feature-Sliced Design (FSD): `references/migration-fsd.md`
 
 ## Response style
 

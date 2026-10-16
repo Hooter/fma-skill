@@ -94,7 +94,7 @@ FSD is a frontend methodology: horizontal layers (`app`, `pages`, `widgets`, `fe
 | Typical friction | deciding whether something is a feature, an entity or a widget | deciding where domain boundaries lie |
 | Complexity levels | none built in | `simple` / `rich` tiers |
 
-They share the public-API idea and enforcement by lint rules. FMA trades FSD's universal layer ranking for domain ownership, which suits backends and large domain-heavy frontends better.
+They share the public-API idea and enforcement by lint rules. FMA trades FSD's universal layer ranking for domain ownership, which suits backends and large domain-heavy frontends better. To move an FSD project over, see [Migration from FSD](/references/migration-fsd).
 
 ### Domain-Driven Design (DDD)
 

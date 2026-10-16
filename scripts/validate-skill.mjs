@@ -21,6 +21,7 @@ export const REQUIRED_HEADINGS = {
     '## Verify before enabling',
   ],
   'references/migration.md': ['## Term mapping', '## Migration steps'],
+  'references/migration-fsd.md': ['## Term mapping', '## Migration steps'],
 };
 
 export function parseFrontmatter(text) {

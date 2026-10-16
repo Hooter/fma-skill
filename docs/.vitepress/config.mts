@@ -7,6 +7,7 @@ const refs = [
   { text: 'Transports', link: '/references/transport' },
   { text: 'Enforcement', link: '/references/enforcement' },
   { text: 'Migration from FDA', link: '/references/migration' },
+  { text: 'Migration from FSD', link: '/references/migration-fsd' },
 ];
 
 const refsRu = [
@@ -16,6 +17,7 @@ const refsRu = [
   { text: 'Транспорты (en)', link: '/references/transport' },
   { text: 'Проверка правил (en)', link: '/references/enforcement' },
   { text: 'Переход с FDA (en)', link: '/references/migration' },
+  { text: 'Переход с FSD (en)', link: '/references/migration-fsd' },
 ];
 
 export default defineConfig({

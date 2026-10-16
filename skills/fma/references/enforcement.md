@@ -96,9 +96,10 @@ Options for real projects:
 | `--services <file.json>` | per-service settings: `[{ "api": "apps/catalog", "root": "src", "nonDomains": ["common"], "tsconfig": "tsconfig.app.json" }]` (`web` instead of `api` for Angular) |
 | `--report` | print every violation but exit 0, to adopt FMA gradually; drop the flag when the count reaches zero |
 
-Two helper templates for adoption:
+Helper templates for adoption:
 
 - `templates/rewrite-imports.mjs`: `node tools/rewrite-imports.mjs moves.json [--root <dir>] [--dry-run]` moves files (or folders, a key ending with `/`) by a table `{ "moves": { "old": "new" }, "aliases": { "@app/": "src/" } }` and rewrites relative and listed-alias imports in the moved files and in their importers. Line endings are preserved, so a CRLF file stays CRLF and the diff stays small. Packages and unknown aliases are not touched.
+- `templates/fsd-to-fma.mjs`: proposes the move table for a Feature-Sliced Design project (see `migration-fsd.md`); review it and feed it to `rewrite-imports.mjs`.
 - `templates/entities.metadata.spec.ts`: a spec that checks that every TypeORM relation named by a string resolves to a registered entity (see `nestjs.md`).
 
 Libraries of an Nx monorepo (`libs/shared/*`) are `shared` for FMA, not domains; they are resolved through the aliases above.
