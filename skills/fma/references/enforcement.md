@@ -95,6 +95,7 @@ Options for real projects:
 | `--tsconfig <file>` (env `FMA_TSCONFIG`) | tsconfig for alias resolution when the service has only `tsconfig.app.json`; the `paths` of a service tsconfig replace the base `paths`, so every library alias must be repeated there or the dependency stays invisible |
 | `--services <file.json>` | per-service settings: `[{ "api": "apps/catalog", "root": "src", "nonDomains": ["common"], "tsconfig": "tsconfig.app.json" }]` (`web` instead of `api` for Angular) |
 | `--report` | print every violation but exit 0, to adopt FMA gradually; drop the flag when the count reaches zero |
+| `--json <file>` | write a summary: `targets[]` with `dir`, `label`, `counts` (violations per rule) and `violations[]` (`rule`, `from`, `to`), plus `total`. Works with and without `--report`; a project that wants a table or a trend can read this file instead of writing its own wrapper |
 
 Helper templates for adoption:
 
@@ -156,7 +157,7 @@ During review the agent runs `arch:check` and quotes the name of the violated ru
 - `modulesWithoutIndex` and `no-deep-import` treat any folder at the domain root, except `shared`, `contracts` and the `--non-domains` list, as a domain.
 - Only one domain root per run: a project with domains in two places is described by two entries in `--services`.
 - A cross-service rule ("only RPC, HTTP, events") is not automated (see `transport.md`).
-- `no-circular` does not report cycles whose reported module is a `*.entity.ts` file: two-way ORM relations inside one domain (`Product ↔ ProductImage`) are normal. A cycle across domains still goes through `index.ts` and is reported there. The cycle check sees type-only imports (`tsPreCompilationDeps: true`). The report does not say what crosses a cycle arc (a value, a type or an enum): look at the imports yourself (see "Before breaking a cycle" in `nestjs.md`).
+- `no-circular` does not report cycles whose reported module is a `*.entity.ts` file: two-way ORM relations inside one domain (`Product ↔ ProductImage`) are normal. A cycle across domains still goes through `index.ts` and is reported there. The cycle check sees type-only imports (`tsPreCompilationDeps: true`). For every cycle `arch:check` prints each arc with the kind of the import (`[value]` or `[type]`, a type-only import) and the imported names, so you can see at once whether the cycle is held by one type or enum (move it to the owner's `types.ts` or to `shared/<segment>`) or by a real two-way dependency (facade or port). An enum shows as `[value]`: the names tell it apart.
 - A rule "a service imports no other service's `src`, only `libs/*`" is not in the template. To add it to a project copy: `from: { path: '^apps/<service>/' }, to: { path: '^apps/<other>/' }` in a run from the repository root.
 - `arch:check` does not see what the TypeORM CLI loads (no `tsconfig-paths`): add a test or script that loads the data source and builds the metadata.
 - `arch:check` stops when dependency-cruiser processed fewer modules than there are source files: `npx` in a folder without `package.json` runs in the nearest parent and silently checks other code.

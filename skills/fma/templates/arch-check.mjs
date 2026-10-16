@@ -84,7 +84,86 @@ export function modulesWithoutIndex(srcRoot, nonDomains = []) {
 function exec(cmd, args, cwd, env) {
   // shell: true — on Windows the commands in node_modules/.bin are .cmd shims.
   const r = spawnSync(cmd, args, { cwd, encoding: 'utf8', env, shell: true });
-  return { code: r.status ?? 1, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
+  return { code: r.status ?? 1, out: `${r.stdout ?? ''}${r.stderr ?? ''}`, stdout: r.stdout ?? '' };
+}
+
+// Names listed by the import or export statement of `text` that has the given specifier.
+export function importedNames(text, specifier) {
+  const esc = specifier.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const re = new RegExp(
+    `(?:import|export)\\s+(?:type\\s+)?([^;]*?)\\s*from\\s*['"]${esc}['"]`,
+    'g',
+  );
+  const names = [];
+  for (const m of text.matchAll(re)) {
+    const inner = m[1].replace(/[{}]/g, ' ');
+    for (const part of inner.split(',')) {
+      const name = part
+        .trim()
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)[0]
+        .trim();
+      if (name) names.push(name);
+    }
+  }
+  return [...new Set(names)];
+}
+
+// Each cycle of the dependency-cruiser JSON report once, as arcs: what is imported along every step
+// (a value, or a type only) and the imported names. `read` returns the text of a file or undefined.
+export function cycleArcs(report, read = () => undefined) {
+  const byName = new Map(report.modules.map((m) => [m.source, m]));
+  const seen = new Set();
+  const cycles = [];
+  for (const v of report.summary?.violations ?? []) {
+    if (v.type !== 'cycle' || !v.cycle?.length) continue;
+    const members = [v.from, ...v.cycle.map((c) => c.name)];
+    const key = [...new Set(members)].sort().join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const arcs = [];
+    let prev = v.from;
+    for (const [i, step] of v.cycle.entries()) {
+      const dep = byName.get(prev)?.dependencies.find((d) => d.resolved === step.name);
+      const specifier = i === 0 ? (v.unresolvedTo ?? dep?.module) : dep?.module;
+      const text = read(prev);
+      const names = text && specifier ? importedNames(text, specifier) : [];
+      arcs.push({
+        from: prev,
+        to: step.name,
+        kind: step.dependencyTypes.includes('type-only') ? 'type' : 'value',
+        names,
+      });
+      prev = step.name;
+    }
+    cycles.push({ rule: v.rule.name, arcs });
+  }
+  return cycles;
+}
+
+export function formatCycles(cycles) {
+  return cycles
+    .map(
+      (c) =>
+        `cycle (${c.rule}):\n` +
+        c.arcs
+          .map(
+            (a) =>
+              `  ${a.from} → ${a.to}  [${a.kind}]${a.names.length ? `  ${a.names.join(', ')}` : ''}`,
+          )
+          .join('\n') +
+        '\n  A cycle held by a type or a value that sits in the wrong module is fixed by moving it to the owner (types.ts) or to shared/<segment>; a facade or a port is for a real two-way dependency.',
+    )
+    .join('\n');
+}
+
+// Summary for --json: violations per rule and the pairs behind them.
+export function summarizeViolations(report) {
+  return (report.summary?.violations ?? []).map((v) => ({
+    rule: v.rule.name,
+    from: v.from,
+    to: v.to,
+  }));
 }
 
 function section(title, result) {
@@ -180,6 +259,7 @@ export function runArchCheck({
   infraDirs,
   tsconfig,
   report = false,
+  json,
   linter = 'eslint',
   eslintConfig,
   oxlintConfig,
@@ -192,6 +272,7 @@ export function runArchCheck({
     return 1;
   }
   let failed = 0;
+  const summary = { targets: [] };
   const targets = buildTargets({
     web,
     api,
@@ -203,10 +284,13 @@ export function runArchCheck({
     tsconfig,
   });
   for (const { label, dir, root, nonDomains: extra, infraDirs: infra, tsconfig: tsc } of targets) {
+    const found = [];
+    summary.targets.push({ dir, label, violations: found });
     const tsVersion = resolveTypeScriptVersion(dir);
     const tsProblem = tsVersion ? typescriptProblem(tsVersion) : null;
     if (tsProblem) {
       console.error(`\n✘ ${dir}: ${tsProblem}`);
+      found.push({ rule: 'typescript-api', from: dir });
       failed = 1;
     }
     const src = path.join(dir, 'src');
@@ -216,6 +300,7 @@ export function runArchCheck({
       console.error(
         `\n✘ ${dir}: module has no index.ts (FMA)\n${noIndex.map((d) => `  ${d}`).join('\n')}`,
       );
+      noIndex.forEach((d) => found.push({ rule: 'module-has-index', from: d }));
       failed = 1;
     }
     const bad = barrelViolations(src);
@@ -223,6 +308,7 @@ export function runArchCheck({
       console.error(
         `\n✘ ${dir}: export * in index.ts (forbidden by FMA)\n${bad.map((f) => `  ${f}`).join('\n')}`,
       );
+      bad.forEach((f) => found.push({ rule: 'no-star-export', from: f }));
       failed = 1;
     }
     const lintConfig = linter === 'eslint' ? eslintConfig : oxlintConfig;
@@ -255,10 +341,41 @@ export function runArchCheck({
       cruise.code = 1;
       cruise.out = `dependency-cruiser processed ${cruised} modules but ${dir}/src has ${expected} source files: it probably ran in another folder (add a package.json or install dependency-cruiser in this one).\n${cruise.out}`;
     }
+    if (cruise.code !== 0 || json) {
+      // Second run with the JSON report: what travels along every arc of a cycle, and the summary for --json.
+      const raw = exec(
+        'depcruise',
+        ['src', '--config', JSON.stringify(depcruiseConfig), '--output-type', 'json'],
+        dir,
+        cruiseEnv,
+      );
+      try {
+        const rep = JSON.parse(raw.stdout);
+        found.push(...summarizeViolations(rep));
+        const cycles = cycleArcs(rep, (f) => {
+          try {
+            return fs.readFileSync(path.join(dir, f), 'utf8');
+          } catch {
+            return undefined;
+          }
+        });
+        if (cycles.length && cruise.code !== 0) cruise.out += `\n${formatCycles(cycles)}`;
+      } catch {
+        // The text report above is still shown.
+      }
+    }
     failed |= section(`${dir}: dependency-cruiser`, cruise);
     if (label === 'web') {
       failed |= section(`${dir}: sheriff`, exec('sheriff', ['verify', 'src/main.ts'], dir, env));
     }
+  }
+  if (json) {
+    for (const t of summary.targets) {
+      t.counts = {};
+      for (const v of t.violations) t.counts[v.rule] = (t.counts[v.rule] ?? 0) + 1;
+    }
+    summary.total = summary.targets.reduce((n, t) => n + t.violations.length, 0);
+    fs.writeFileSync(json, `${JSON.stringify(summary, null, 2)}\n`);
   }
   if (!failed) console.log('arch:check: no violations');
   else if (report) console.log('\narch:check (--report): violations are listed above, exit code 0');
@@ -290,6 +407,7 @@ if (isMain) {
         .filter(Boolean),
       tsconfig: one('--tsconfig', process.env.FMA_TSCONFIG),
       report: argv.includes('--report'),
+      json: file('--json'),
       linter: one('--linter', 'eslint'),
       eslintConfig: file('--eslint-config', path.resolve('eslint.config.mjs')),
       oxlintConfig: file('--oxlint-config', path.resolve('.oxlintrc.json')),
