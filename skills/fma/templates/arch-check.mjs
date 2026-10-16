@@ -228,8 +228,9 @@ export function buildTargets({
   nonDomains = [],
   infraDirs = [],
   tsconfig,
+  sheriff = true,
 }) {
-  const base = { nonDomains, infraDirs, tsconfig };
+  const base = { nonDomains, infraDirs, tsconfig, sheriff };
   const targets = [];
   if (web) targets.push({ ...base, label: 'web', dir: web, root: webRoot });
   for (const dir of [api ?? []].flat()) {
@@ -244,6 +245,7 @@ export function buildTargets({
       nonDomains: [...nonDomains, ...(s.nonDomains ?? [])],
       infraDirs: [...infraDirs, ...(s.infraDirs ?? [])],
       tsconfig: s.tsconfig ?? tsconfig,
+      sheriff: s.sheriff ?? sheriff,
     });
   }
   return targets;
@@ -258,6 +260,7 @@ export function runArchCheck({
   nonDomains,
   infraDirs,
   tsconfig,
+  sheriff,
   report = false,
   json,
   linter = 'eslint',
@@ -282,8 +285,17 @@ export function runArchCheck({
     nonDomains,
     infraDirs,
     tsconfig,
+    sheriff,
   });
-  for (const { label, dir, root, nonDomains: extra, infraDirs: infra, tsconfig: tsc } of targets) {
+  for (const {
+    label,
+    dir,
+    root,
+    nonDomains: extra,
+    infraDirs: infra,
+    tsconfig: tsc,
+    sheriff: useSheriff,
+  } of targets) {
     const found = [];
     summary.targets.push({ dir, label, violations: found });
     const tsVersion = resolveTypeScriptVersion(dir);
@@ -365,7 +377,7 @@ export function runArchCheck({
       }
     }
     failed |= section(`${dir}: dependency-cruiser`, cruise);
-    if (label === 'web') {
+    if (label === 'web' && useSheriff) {
       failed |= section(`${dir}: sheriff`, exec('sheriff', ['verify', 'src/main.ts'], dir, env));
     }
   }
@@ -406,6 +418,7 @@ if (isMain) {
         .map((x) => x.trim())
         .filter(Boolean),
       tsconfig: one('--tsconfig', process.env.FMA_TSCONFIG),
+      sheriff: !argv.includes('--no-sheriff'),
       report: argv.includes('--report'),
       json: file('--json'),
       linter: one('--linter', 'eslint'),

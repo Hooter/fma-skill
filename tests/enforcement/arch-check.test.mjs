@@ -212,3 +212,17 @@ test('FMA_TSCONFIG via --tsconfig resolves aliases of a service without tsconfig
   assert.notEqual(withCfg.code, 0, withCfg.out);
   assert.match(withCfg.out, /no-deep-import/);
 });
+
+test('--no-sheriff skips the Sheriff step for web (routes imported by path from the composition root)', () => {
+  const files = {
+    ...cleanWeb,
+    ...cleanApi,
+    'apps/web/src/main.ts': "import { A } from './app/a';\nimport { R } from './app/a/a.routes';\nexport const a = [A, R];\n",
+    'apps/web/src/app/a/a.routes.ts': 'export const R = 1;\n',
+  };
+  const withSheriff = archCheck(files);
+  assert.notEqual(withSheriff.code, 0, withSheriff.out);
+  assert.match(withSheriff.out, /sheriff/);
+  const without = archCheck(files, ['--no-sheriff']);
+  assert.equal(without.code, 0, without.out);
+});

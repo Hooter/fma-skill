@@ -42,7 +42,7 @@ Mapping to terms: `*-page.ts` and the component folders are the `ui` layer; `*-s
 8. `tsconfig` aliases: `@app/<domain>` → `src/app/<domain>`, `@contracts/<domain>` → `libs/contracts/src/<domain>`, `@shared/<segment>` → `src/app/shared/<segment>`. Importing `@app/<domain>/<file>` is forbidden.
 9. Linking domains: a neighbor exposes a showcase component through `index.ts`; data flows through component inputs or events, and the neighbor's state is never imported.
 10. A cycle `service ↔ store` through a shared type is broken by moving the type into its own file (`user-profile.ts`).
-11. Lazy loading. If the neighbor imports a service from `index.ts`, anything else exported there lands in the neighbor's chunk. When routes and components make that costly, keep `index.ts` to what neighbors need (services, stores, types) and let the composition root (`app.routes.ts`) load `<domain>.routes.ts` by its path; this is a conscious exception to the `index.ts` example below.
+11. Lazy loading. If the neighbor imports a service from `index.ts`, anything else exported there lands in the neighbor's chunk. When routes and components make that costly, keep `index.ts` to what neighbors need (services, stores, types) and let the composition root (`app.routes.ts`) load `<domain>.routes.ts` by its path; this is a conscious exception to the `index.ts` example below. Sheriff cannot express it (it wants every import of a feature to go through `index.ts`), so run `arch:check` with `--no-sheriff`; the domain boundaries stay checked by dependency-cruiser.
 
 Example of `state` on signals:
 

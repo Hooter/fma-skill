@@ -94,6 +94,7 @@ Options for real projects:
 | `--infra-dirs a,b` (env `FMA_INFRA_DIRS`) | folders outside the domain root that must not import domains (rule `infra-no-domain`): `src/app/core,src/app/shared` next to an Angular `--web-root src/app/features`. In `--services` the field is `infraDirs` |
 | `--tsconfig <file>` (env `FMA_TSCONFIG`) | tsconfig for alias resolution when the service has only `tsconfig.app.json`; the `paths` of a service tsconfig replace the base `paths`, so every library alias must be repeated there or the dependency stays invisible |
 | `--services <file.json>` | per-service settings: `[{ "api": "apps/catalog", "root": "src", "nonDomains": ["common"], "tsconfig": "tsconfig.app.json" }]` (`web` instead of `api` for Angular) |
+| `--no-sheriff` (in `--services`: `"sheriff": false`) | skip Sheriff for Angular. Sheriff is optional and runs only for `--web`; NestJS apps never use it. Skip it when the composition root imports `<domain>.routes.ts` by path (see `angular.md`, rule 11): Sheriff requires every import of a feature to go through its `index.ts` and cannot express that exception; dependency-cruiser keeps checking the domain boundaries |
 | `--report` | print every violation but exit 0, to adopt FMA gradually; drop the flag when the count reaches zero |
 | `--json <file>` | write a summary: `targets[]` with `dir`, `label`, `counts` (violations per rule) and `violations[]` (`rule`, `from`, `to`), plus `total`. Works with and without `--report`; a project that wants a table or a trend can read this file instead of writing its own wrapper |
 
@@ -141,7 +142,7 @@ pnpm run arch:check
 2. the `index.ts` barrel check (`export *`, `export * as ns`);
 3. the linter with architecture rules (`--linter eslint` by default or `--linter oxlint`);
 4. dependency-cruiser for `apps/api` and `apps/web` (for `web` with `FMA_SRC_ROOT=src/app`);
-5. Sheriff for `apps/web`.
+5. Sheriff for `apps/web` (optional, `--no-sheriff` skips it).
 
 Checklist coverage: items 1–8 of `SKILL.md` are checked by these steps within the limitations below.
 

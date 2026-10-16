@@ -25,7 +25,7 @@ Two tool profiles (details in `skills/fma/references/enforcement.md`):
 - **Baseline:** ESLint, Prettier, TypeScript 6. The primary profile, works everywhere.
 - **Fast:** oxlint, oxfmt, `tsc` 7. Enable it where it works.
 
-Copy the templates from `skills/fma/templates/` following the table in `enforcement.md`. `arch:check` selects the linter with the `--linter eslint|oxlint` flag. For real projects there are `--api` (repeatable), `--api-root`/`--web-root`, `--non-domains`, `--infra-dirs`, `--tsconfig`, `--services`, `--report` and `--json` (see `enforcement.md`).
+Copy the templates from `skills/fma/templates/` following the table in `enforcement.md`. `arch:check` selects the linter with the `--linter eslint|oxlint` flag. For real projects there are `--api` (repeatable), `--api-root`/`--web-root`, `--non-domains`, `--infra-dirs`, `--tsconfig`, `--services`, `--report`, `--json` and `--no-sheriff` (see `enforcement.md`).
 
 TypeScript: dependency-cruiser, Sheriff and typescript-eslint need the TypeScript 6 JS API, and TypeScript 7.0 does not have one. `npm:@typescript/typescript6` is installed under the name `typescript`, and TypeScript 7 (`tsc`) is installed separately under the alias `@typescript/native`.
 
