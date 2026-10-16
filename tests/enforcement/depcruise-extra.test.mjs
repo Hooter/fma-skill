@@ -324,3 +324,38 @@ test('Angular naming: the dotted form and a submodule with index.ts are not comp
   });
   assert.equal(ok.code, 0, ok.out);
 });
+
+test('infra-no-domain: core/ outside the domain root does not import features', () => {
+  const run2 = (files) =>
+    run(DEPCRUISE, ['src', '--config', CONFIG], makeFixture({ 'tsconfig.json': tsconfig, ...files }), {
+      FMA_SRC_ROOT: 'src/app/features',
+      FMA_INFRA_DIRS: 'src/app/core',
+    });
+  const base = {
+    'src/app/features/cart/index.ts': "export { C } from './c';\n",
+    'src/app/features/cart/c.ts': 'export const C = 1;\n',
+  };
+  const ok = run2({ ...base, 'src/app/core/auth.ts': 'export const A = 1;\n' });
+  assert.equal(ok.code, 0, ok.out);
+  const bad = run2({ ...base, 'src/app/core/auth.ts': "import { C } from '../features/cart';\nexport const A = C;\n" });
+  assert.notEqual(bad.code, 0, bad.out);
+  assert.match(bad.out, /infra-no-domain/);
+});
+
+test('no-circular does not report two-way relations between the entities of one domain, but reports other cycles', () => {
+  const entities = {
+    ...cart,
+    'src/cart/product.entity.ts': "import type { Image } from './image.entity';\nexport class Product { i?: Image; }\n",
+    'src/cart/image.entity.ts': "import type { Product } from './product.entity';\nexport class Image { p?: Product; }\n",
+  };
+  const ok = cruise(entities);
+  assert.equal(ok.code, 0, ok.out);
+  expectRule(
+    {
+      ...cart,
+      'src/cart/a.service.ts': "import { b } from './b.service';\nexport const a = b;\n",
+      'src/cart/b.service.ts': "import { a } from './a.service';\nexport const b = a;\n",
+    },
+    'no-circular',
+  );
+});

@@ -91,9 +91,15 @@ Options for real projects:
 | `--api <dir>` | repeatable: several NestJS services in one run |
 | `--api-root <path>` / `--web-root <path>` | domain root inside `src` (defaults `src` and `src/app`); `src/app` for `@nx/nest`, `src/app/features` for an Angular app that keeps domains in `features/` |
 | `--non-domains a,b,c` (env `FMA_NON_DOMAINS`) | root folders that are infrastructure, not domains: they need no `index.ts` and a domain may import their files directly. Recommended for Nest: `common,config,database,migrations,metrics`; add `app` (composition root) when it sits next to the domains |
+| `--infra-dirs a,b` (env `FMA_INFRA_DIRS`) | folders outside the domain root that must not import domains (rule `infra-no-domain`): `src/app/core,src/app/shared` next to an Angular `--web-root src/app/features`. In `--services` the field is `infraDirs` |
 | `--tsconfig <file>` (env `FMA_TSCONFIG`) | tsconfig for alias resolution when the service has only `tsconfig.app.json`; the `paths` of a service tsconfig replace the base `paths`, so every library alias must be repeated there or the dependency stays invisible |
 | `--services <file.json>` | per-service settings: `[{ "api": "apps/catalog", "root": "src", "nonDomains": ["common"], "tsconfig": "tsconfig.app.json" }]` (`web` instead of `api` for Angular) |
 | `--report` | print every violation but exit 0, to adopt FMA gradually; drop the flag when the count reaches zero |
+
+Two helper templates for adoption:
+
+- `templates/rewrite-imports.mjs`: `node tools/rewrite-imports.mjs moves.json [--root <dir>] [--dry-run]` moves files (or folders, a key ending with `/`) by a table `{ "moves": { "old": "new" }, "aliases": { "@app/": "src/" } }` and rewrites relative and listed-alias imports in the moved files and in their importers. Line endings are preserved, so a CRLF file stays CRLF and the diff stays small. Packages and unknown aliases are not touched.
+- `templates/entities.metadata.spec.ts`: a spec that checks that every TypeORM relation named by a string resolves to a registered entity (see `nestjs.md`).
 
 Libraries of an Nx monorepo (`libs/shared/*`) are `shared` for FMA, not domains; they are resolved through the aliases above.
 
@@ -143,12 +149,14 @@ During review the agent runs `arch:check` and quotes the name of the violated ru
 
 - Sheriff rejects a `tsconfig` path mapping that leads to a nonexistent folder ("invalid path mapping detected"). Add the `@shared/*` and `@contracts/*` aliases at the same moment you create the first `src/app/shared/<segment>` folder and `libs/contracts/src/<domain>`; an empty project must not have the aliases before that.
 - Contracts are checked by Sheriff: `libs/contracts/src/<name>` is a module tagged `kind:contracts` (the path is given from the root where `sheriff.config.ts` lives); contracts depend on nothing and are available to domains.
+- Adapters of external systems (`*-adapter.service.ts`) and message-consuming services (`*-consumer.service.ts`, `*.worker.ts`) end with `.service.ts`/`.worker.ts` and are covered by the `service` and `api` rules respectively; a file that ends differently is not covered (see "Layers of adapters and consumers" in `nestjs.md`).
 - Layers are determined by file names (NestJS `*.service.ts`, `*.repository.ts`; Angular `*-state.ts`, `*-api.ts`, `*-page.ts`, `*-mapper.ts`, `*-rules.ts`) and, in Angular, by component folders. A file with another name is not covered by the layer rules. A public submodule without `index.ts` would be taken for a component folder: give every module an `index.ts`.
 - `ui/` and `domain/` are recognized in a domain and at any depth of submodules; `_submodules` are recognized by the `_` prefix. A public submodule `sub/` (without `_`) has no isolation rules of its own: it is closed to neighbors by the general `no-deep-import`.
 - `modulesWithoutIndex` and `no-deep-import` treat any folder at the domain root, except `shared`, `contracts` and the `--non-domains` list, as a domain.
 - Only one domain root per run: a project with domains in two places is described by two entries in `--services`.
 - A cross-service rule ("only RPC, HTTP, events") is not automated (see `transport.md`).
-- Cycles between entities of one domain (`A ↔ B` through `@ManyToOne`) are counted by `no-circular`; reference the entity by a string name and `import type`, or exclude `*.entity.ts` of the same domain with `from.pathNot` in the project copy of the template. The cycle check sees type-only imports (`tsPreCompilationDeps: true`).
+- `no-circular` does not report cycles whose reported module is a `*.entity.ts` file: two-way ORM relations inside one domain (`Product ↔ ProductImage`) are normal. A cycle across domains still goes through `index.ts` and is reported there. The cycle check sees type-only imports (`tsPreCompilationDeps: true`). The report does not say what crosses a cycle arc (a value, a type or an enum): look at the imports yourself (see "Before breaking a cycle" in `nestjs.md`).
+- A rule "a service imports no other service's `src`, only `libs/*`" is not in the template. To add it to a project copy: `from: { path: '^apps/<service>/' }, to: { path: '^apps/<other>/' }` in a run from the repository root.
 - `arch:check` does not see what the TypeORM CLI loads (no `tsconfig-paths`): add a test or script that loads the data source and builds the metadata.
 - `arch:check` stops when dependency-cruiser processed fewer modules than there are source files: `npx` in a folder without `package.json` runs in the nearest parent and silently checks other code.
 - Service topology rules (`apps/<service>`) are not automated (see `transport.md`).

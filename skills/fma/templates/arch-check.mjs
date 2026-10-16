@@ -147,9 +147,10 @@ export function buildTargets({
   webRoot = 'src/app',
   apiRoot = 'src',
   nonDomains = [],
+  infraDirs = [],
   tsconfig,
 }) {
-  const base = { nonDomains, tsconfig };
+  const base = { nonDomains, infraDirs, tsconfig };
   const targets = [];
   if (web) targets.push({ ...base, label: 'web', dir: web, root: webRoot });
   for (const dir of [api ?? []].flat()) {
@@ -162,6 +163,7 @@ export function buildTargets({
       dir: path.resolve(s.web ?? s.api),
       root: s.root ?? (label === 'web' ? webRoot : apiRoot),
       nonDomains: [...nonDomains, ...(s.nonDomains ?? [])],
+      infraDirs: [...infraDirs, ...(s.infraDirs ?? [])],
       tsconfig: s.tsconfig ?? tsconfig,
     });
   }
@@ -175,6 +177,7 @@ export function runArchCheck({
   webRoot,
   apiRoot,
   nonDomains,
+  infraDirs,
   tsconfig,
   report = false,
   linter = 'eslint',
@@ -189,8 +192,17 @@ export function runArchCheck({
     return 1;
   }
   let failed = 0;
-  const targets = buildTargets({ web, api, services, webRoot, apiRoot, nonDomains, tsconfig });
-  for (const { label, dir, root, nonDomains: extra, tsconfig: tsc } of targets) {
+  const targets = buildTargets({
+    web,
+    api,
+    services,
+    webRoot,
+    apiRoot,
+    nonDomains,
+    infraDirs,
+    tsconfig,
+  });
+  for (const { label, dir, root, nonDomains: extra, infraDirs: infra, tsconfig: tsc } of targets) {
     const tsVersion = resolveTypeScriptVersion(dir);
     const tsProblem = tsVersion ? typescriptProblem(tsVersion) : null;
     if (tsProblem) {
@@ -223,6 +235,7 @@ export function runArchCheck({
       FMA_SRC_ROOT: posix(root),
       FMA_APP: label,
       ...(extra?.length ? { FMA_NON_DOMAINS: extra.join(',') } : {}),
+      ...(infra?.length ? { FMA_INFRA_DIRS: infra.join(',') } : {}),
       ...(tsc ? { FMA_TSCONFIG: path.resolve(dir, tsc) } : {}),
     };
     const cruise = exec(
@@ -268,6 +281,10 @@ if (isMain) {
       webRoot: one('--web-root'),
       apiRoot: one('--api-root'),
       nonDomains: (one('--non-domains', process.env.FMA_NON_DOMAINS ?? '') ?? '')
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean),
+      infraDirs: (one('--infra-dirs', process.env.FMA_INFRA_DIRS ?? '') ?? '')
         .split(',')
         .map((x) => x.trim())
         .filter(Boolean),

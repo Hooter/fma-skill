@@ -8,12 +8,18 @@
 //                                           dotted form cart.state.ts is accepted too) and a folder of a domain without index.ts is
 //                                           a presentational component folder (cart-badge/). Without it the NestJS naming applies
 //                                           (cart.service.ts) and the legacy ui/ folder is recognized.
+//   FMA_INFRA_DIRS=src/app/core,src/app/shared  folders outside the domain root (paths from cwd) that must not import domains
+//                                           (rule infra-no-domain), e.g. core/ next to an Angular features/ root
 //   FMA_TSCONFIG=tsconfig.app.json          tsconfig used to resolve aliases (Nx services have no tsconfig.json)
 // Regular expressions avoid nested quantifiers: dependency-cruiser considers them unsafe.
 const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = process.env.FMA_SRC_ROOT || 'src';
+const INFRA_DIRS = (process.env.FMA_INFRA_DIRS || '')
+  .split(',')
+  .map((x) => x.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
 const TSCONFIG = process.env.FMA_TSCONFIG || 'tsconfig.json';
 const escape = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const EXTRA_NON_DOMAINS = (process.env.FMA_NON_DOMAINS || '')
@@ -72,8 +78,9 @@ module.exports = {
     {
       name: 'no-circular',
       severity: 'error',
-      comment: 'Cycles between modules are forbidden (FMA).',
-      from: {},
+      comment:
+        'Cycles between modules are forbidden (FMA). Two-way ORM relations between the entities of one domain are not reported (a cycle that goes through another file still is).',
+      from: { pathNot: '\\.entity\\.ts$' },
       to: { circular: true },
     },
     {
@@ -87,6 +94,18 @@ module.exports = {
         pathNot: [`^${ROOT}/$1/`, `^${ROOT}/(${NON_DOMAIN_ALT})/`, `^${ROOT}/[^/]+${INDEX}`],
       },
     },
+    ...(INFRA_DIRS.length
+      ? [
+          {
+            name: 'infra-no-domain',
+            severity: 'error',
+            comment:
+              'Infrastructure folders outside the domain root (core, shared) do not import domains (FMA): the dependency goes from a feature to infrastructure.',
+            from: { path: INFRA_DIRS.map((d) => `^${escape(d)}/`) },
+            to: { path: `^${ROOT}/[^/]+/`, pathNot: `^${ROOT}/(${NON_DOMAIN_ALT})/` },
+          },
+        ]
+      : []),
     {
       name: 'no-deep-shared',
       severity: 'error',
