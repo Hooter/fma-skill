@@ -34,6 +34,10 @@ export { CartItemAddedV1 } from './events';
 export type { CartItemAddedV1Payload } from './events';
 ```
 
+### Nx libraries and generated contracts
+
+`libs/contracts` is the FMA name for the shared layer. In an Nx monorepo the same role is played by libraries with an organization alias (`@org/shared/types`, `@org/event-contracts`): map them to `contracts` (types, schemas, event names, no behavior) or `shared` (utilities, infrastructure such as `libs/shared/auth`); neither is a domain. When contracts are generated from TypeSpec or OpenAPI, the generated package is the source of truth instead of Zod: keep the generator output untouched and re-export what applications need through the library's `index.ts`. Aliases of such libraries must reach the `tsconfig` that dependency-cruiser uses (`--tsconfig`).
+
 ## Events
 
 - Name: `<domain>.<past-tense>`, for example `cart.item-added`. The version is part of the schema and of the export name (`CartItemAddedV1`).

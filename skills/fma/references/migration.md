@@ -6,10 +6,10 @@ FMA (Fractal Module Architecture) is a fork of FDA (Fractal Domain Architecture,
 
 | Original FDA | FMA | Note |
 |---|---|---|
-| `+page.svelte` / `page.tsx` | `*.page.ts` + `ui/` (Angular) | none in NestJS |
-| `controller.ts`, `controller.svelte.ts`, `stores.ts`, `state.ts` | `*.state.ts` | the word "controller" is not a layer |
-| `rpc.ts` | `*.api.ts` (Angular), `*.controller.ts` / `*.consumer.ts` (NestJS) | |
-| `model.server.ts` | `*.model.ts` (Angular), `*.service.ts` (NestJS) | |
+| `+page.svelte` / `page.tsx` | `*-page.ts` + component folders named by subject (Angular) | none in NestJS |
+| `controller.ts`, `controller.svelte.ts`, `stores.ts`, `state.ts` | `*-state.ts` (Angular) | the word "controller" is not a layer |
+| `rpc.ts` | `*-api.ts` (Angular), `*.controller.ts` / `*.consumer.ts` (NestJS) | |
+| `model.server.ts` | `*-mapper.ts` / `*-rules.ts` (Angular), `*.service.ts` (NestJS) | |
 | `lib/server/repo/*` | `*.repository.ts` | |
 | `schema.ts` | `*.entity.ts` | |
 | `policy.ts` | `*.policy.ts` | unchanged |

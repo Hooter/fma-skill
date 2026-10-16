@@ -261,3 +261,66 @@ test('a dynamic import() deep into a neighbor is caught by depcruise (a safety n
     'no-deep-import',
   );
 });
+
+// Angular naming (FMA_APP=web): the role is the end of the file name, component folders have no index.ts.
+const cruiseWeb = (files) =>
+  run(DEPCRUISE, ['src', '--config', CONFIG], makeFixture({ 'tsconfig.json': tsconfig, ...files }), { FMA_APP: 'web' });
+const webCart = {
+  'src/cart/index.ts': "export { CartApi } from './cart-api';\n",
+  'src/cart/cart-api.ts': 'export class CartApi {}\n',
+  'src/cart/cart-state.ts': "import { CartApi } from './cart-api';\nexport class CartState { a = CartApi; }\n",
+};
+
+test('Angular naming: a component in a subject folder may use state but not api (ui-no-data)', () => {
+  const ok = cruiseWeb({
+    ...webCart,
+    'src/cart/cart-badge/cart-badge.ts': "import { CartState } from '../cart-state';\nexport class CartBadge { s = CartState; }\n",
+  });
+  assert.equal(ok.code, 0, ok.out);
+  const bad = cruiseWeb({
+    ...webCart,
+    'src/cart/cart-badge/cart-badge.ts': "import { CartApi } from '../cart-api';\nexport class CartBadge { a = CartApi; }\n",
+  });
+  assert.notEqual(bad.code, 0, bad.out);
+  assert.match(bad.out, /ui-no-data/);
+});
+
+test('Angular naming: page importing a mapper or rules file is forbidden, state may import them', () => {
+  const files = {
+    ...webCart,
+    'src/cart/cart-mapper.ts': 'export const toCartView = () => 1;\n',
+    'src/cart/cart-rules.ts': 'export const canCheckout = () => true;\n',
+  };
+  for (const f of ['cart-mapper', 'cart-rules']) {
+    const bad = cruiseWeb({ ...files, 'src/cart/cart-page.ts': `import * as m from './${f}';\nexport class CartPage { m = m; }\n` });
+    assert.notEqual(bad.code, 0, bad.out);
+    assert.match(bad.out, /ui-no-data/);
+  }
+  const ok = cruiseWeb({ ...files, 'src/cart/cart-state.ts': "import { toCartView } from './cart-mapper';\nexport class CartState { v = toCartView; }\n" });
+  assert.equal(ok.code, 0, ok.out);
+});
+
+test('Angular naming: mapper and api do not import state, state does not import page or component folders', () => {
+  const lower = cruiseWeb({
+    ...webCart,
+    'src/cart/cart-mapper.ts': "import { CartState } from './cart-state';\nexport const m = CartState;\n",
+  });
+  assert.match(lower.out, /lower-no-ui/);
+  const state = cruiseWeb({
+    ...webCart,
+    'src/cart/cart-page.ts': 'export class CartPage {}\n',
+    'src/cart/cart-state.ts': "import { CartPage } from './cart-page';\nexport class CartState { p = CartPage; }\n",
+  });
+  assert.match(state.out, /state-no-ui/);
+});
+
+test('Angular naming: the dotted form and a submodule with index.ts are not component folders', () => {
+  const ok = cruiseWeb({
+    ...webCart,
+    'src/cart/cart.page.ts': "import { CartState } from './cart-state';\nexport class CartPage { s = CartState; }\n",
+    'src/cart/items/index.ts': "export { Items } from './items-api';\n",
+    'src/cart/items/items-api.ts': 'export class Items {}\n',
+    'src/cart/cart-state.ts': "import { CartApi } from './cart-api';\nimport { Items } from './items';\nexport class CartState { a = CartApi; i = Items; }\n",
+  });
+  assert.equal(ok.code, 0, ok.out);
+});

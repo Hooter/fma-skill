@@ -123,3 +123,92 @@ test('an unknown linter is an error with a hint', () => {
   assert.notEqual(r.code, 0, r.out);
   assert.match(r.out, /eslint|oxlint/);
 });
+
+function archCheckApi(files, flags, { tsc = tsconfig } = {}) {
+  const dir = makeFixture({ 'svc/tsconfig.json': tsc, 'svc/package.json': '{}', ...files });
+  const args = [
+    path.join(TEMPLATES, 'arch-check.mjs'),
+    '--linter', 'oxlint',
+    '--oxlint-config', path.join(TEMPLATES, 'oxlintrc.json'),
+    '--depcruise-config', path.join(TEMPLATES, 'dependency-cruiser.cjs'),
+    ...flags(dir),
+  ];
+  const r = spawnSync(process.execPath, args, { cwd: dir, encoding: 'utf8', env, shell: false });
+  return { code: r.status, out: `${r.stdout}${r.stderr}` };
+}
+
+const nestWithCommon = {
+  'svc/src/cart/index.ts': "export { CartService } from './cart.service';\n",
+  'svc/src/cart/cart.service.ts': "import { fmt } from '../common/format';\nexport class CartService { f = fmt; }\n",
+  'svc/src/common/format.ts': 'export const fmt = 1;\n',
+};
+
+test('--non-domains: infrastructure folders are not domains (no index.ts, deep import allowed)', () => {
+  const strict = archCheckApi(nestWithCommon, (d) => ['--api', path.join(d, 'svc')]);
+  assert.notEqual(strict.code, 0, strict.out);
+  assert.match(strict.out, /common/);
+  const ok = archCheckApi(nestWithCommon, (d) => ['--api', path.join(d, 'svc'), '--non-domains', 'common']);
+  assert.equal(ok.code, 0, ok.out);
+});
+
+test('--api-root: domains under src/app (Nx Nest layout)', () => {
+  const files = {
+    'svc/src/main.ts': "import './app/cart';\n",
+    'svc/src/app/cart/index.ts': "export { CartService } from './cart.service';\n",
+    'svc/src/app/cart/cart.service.ts': 'export class CartService {}\n',
+    'svc/src/app/orders/orders.service.ts': "import { CartService } from '../cart/cart.service';\nexport const o = CartService;\n",
+  };
+  const r = archCheckApi(files, (d) => ['--api', path.join(d, 'svc'), '--api-root', 'src/app']);
+  assert.notEqual(r.code, 0, r.out);
+  assert.match(r.out, /orders/);
+  assert.match(r.out, /no-deep-import/);
+});
+
+test('--api is repeatable and --report keeps the exit code at 0', () => {
+  const files = {
+    'a/package.json': '{}',
+    'a/tsconfig.json': tsconfig,
+    'a/src/x/index.ts': "export * from './x';\n",
+    'a/src/x/x.ts': 'export const x = 1;\n',
+    'b/package.json': '{}',
+    'b/tsconfig.json': tsconfig,
+    'b/src/y/y.ts': 'export const y = 1;\n',
+  };
+  const flags = (d) => ['--api', path.join(d, 'a'), '--api', path.join(d, 'b')];
+  const strict = archCheckApi(files, flags);
+  assert.notEqual(strict.code, 0, strict.out);
+  assert.match(strict.out, /export \*/);
+  assert.match(strict.out, /module has no index\.ts/);
+  const report = archCheckApi(files, (d) => [...flags(d), '--report']);
+  assert.equal(report.code, 0, report.out);
+  assert.match(report.out, /export \*/);
+});
+
+test('--services: per-service root, non-domains and tsconfig', () => {
+  const files = {
+    ...nestWithCommon,
+    'svc/tsconfig.app.json': tsconfig,
+    'svc.json': '[{ "api": "svc", "nonDomains": ["common"], "tsconfig": "tsconfig.app.json" }]',
+  };
+  const r = archCheckApi(files, (d) => ['--services', path.join(d, 'svc.json')]);
+  assert.equal(r.code, 0, r.out);
+});
+
+test('FMA_TSCONFIG via --tsconfig resolves aliases of a service without tsconfig.json', () => {
+  const tscAlias = JSON.stringify({
+    compilerOptions: { module: 'ESNext', moduleResolution: 'Bundler', baseUrl: '.', paths: { '@app/*': ['src/*'] } },
+  });
+  const files = {
+    'svc/src/cart/index.ts': "export { CartService } from './cart.service';\n",
+    'svc/src/cart/cart.service.ts': 'export class CartService {}\n',
+    'svc/src/orders/index.ts': "export { O } from './o';\n",
+    'svc/src/orders/o.ts': "import { CartService } from '@app/cart/cart.service';\nexport const O = CartService;\n",
+    'svc/tsconfig.app.json': tscAlias,
+  };
+  const rm = (d) => ['--api', path.join(d, 'svc')];
+  const without = archCheckApi({ ...files }, rm, { tsc: '{}' });
+  const withCfg = archCheckApi({ ...files }, (d) => [...rm(d), '--tsconfig', 'tsconfig.app.json'], { tsc: '{}' });
+  assert.equal(without.code === 0 && /no-deep-import/.test(without.out), false, without.out);
+  assert.notEqual(withCfg.code, 0, withCfg.out);
+  assert.match(withCfg.out, /no-deep-import/);
+});

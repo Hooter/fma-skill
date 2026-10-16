@@ -53,7 +53,9 @@ export function barrelViolations(dir) {
   return findIndexFiles(dir).filter((f) => re.test(stripComments(fs.readFileSync(f, 'utf8'))));
 }
 
-const NON_DOMAINS = new Set(['shared', 'contracts']);
+// Root folders that are never domains. Projects add their own infrastructure folders (common, config, database,
+// migrations, app) through `nonDomains` / --non-domains.
+const NON_DOMAINS = ['shared', 'contracts'];
 
 const subdirs = (dir) =>
   fs
@@ -64,13 +66,15 @@ const subdirs = (dir) =>
 const hasIndex = (dir) =>
   fs.existsSync(path.join(dir, 'index.ts')) || fs.existsSync(path.join(dir, 'index.tsx'));
 
-// Modules: domains (all srcRoot folders except shared and contracts), their _submodules and the shared segments.
-export function modulesWithoutIndex(srcRoot) {
+// Modules: domains (all srcRoot folders except shared, contracts and `nonDomains`), their _submodules and the
+// shared segments.
+export function modulesWithoutIndex(srcRoot, nonDomains = []) {
+  const skip = new Set([...NON_DOMAINS, ...nonDomains]);
   const modules = [];
   for (const dir of subdirs(srcRoot)) {
     const name = path.basename(dir);
     if (name === 'shared') modules.push(...subdirs(dir));
-    else if (!NON_DOMAINS.has(name)) {
+    else if (!skip.has(name)) {
       modules.push(dir, ...subdirs(dir).filter((d) => path.basename(d).startsWith('_')));
     }
   }
@@ -118,12 +122,61 @@ export function parseCruisedModules(output) {
   return m ? Number(m[1]) : null;
 }
 
+// Source files that dependency-cruiser must have seen (specs are excluded by the template).
+export function countSourceFiles(dir, acc = { n: 0 }) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (SKIP.has(entry.name)) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) countSourceFiles(full, acc);
+    else if (/\.tsx?$/.test(entry.name) && !/\.(spec|test)\.tsx?$/.test(entry.name)) acc.n++;
+  }
+  return acc.n;
+}
+
 // File-level linter: eslint (baseline profile) or oxlint (fast profile). The other checks are shared.
 export const LINTERS = ['eslint', 'oxlint'];
+
+const posix = (p) => p.split(path.sep).join('/');
+
+// Targets: the single `web` / `api` apps, a repeatable `api` list, and `services` entries
+// ({ api | web: dir, root?, nonDomains?, tsconfig? }) for monorepos whose services differ.
+export function buildTargets({
+  web,
+  api,
+  services = [],
+  webRoot = 'src/app',
+  apiRoot = 'src',
+  nonDomains = [],
+  tsconfig,
+}) {
+  const base = { nonDomains, tsconfig };
+  const targets = [];
+  if (web) targets.push({ ...base, label: 'web', dir: web, root: webRoot });
+  for (const dir of [api ?? []].flat()) {
+    targets.push({ ...base, label: 'api', dir, root: apiRoot });
+  }
+  for (const s of services) {
+    const label = s.web ? 'web' : 'api';
+    targets.push({
+      label,
+      dir: path.resolve(s.web ?? s.api),
+      root: s.root ?? (label === 'web' ? webRoot : apiRoot),
+      nonDomains: [...nonDomains, ...(s.nonDomains ?? [])],
+      tsconfig: s.tsconfig ?? tsconfig,
+    });
+  }
+  return targets;
+}
 
 export function runArchCheck({
   web,
   api,
+  services,
+  webRoot,
+  apiRoot,
+  nonDomains,
+  tsconfig,
+  report = false,
   linter = 'eslint',
   eslintConfig,
   oxlintConfig,
@@ -136,11 +189,8 @@ export function runArchCheck({
     return 1;
   }
   let failed = 0;
-  for (const [label, dir] of [
-    ['web', web],
-    ['api', api],
-  ]) {
-    if (!dir) continue;
+  const targets = buildTargets({ web, api, services, webRoot, apiRoot, nonDomains, tsconfig });
+  for (const { label, dir, root, nonDomains: extra, tsconfig: tsc } of targets) {
     const tsVersion = resolveTypeScriptVersion(dir);
     const tsProblem = tsVersion ? typescriptProblem(tsVersion) : null;
     if (tsProblem) {
@@ -148,8 +198,8 @@ export function runArchCheck({
       failed = 1;
     }
     const src = path.join(dir, 'src');
-    const domainsRoot = label === 'web' ? path.join(src, 'app') : src;
-    const noIndex = fs.existsSync(domainsRoot) ? modulesWithoutIndex(domainsRoot) : [];
+    const domainsRoot = path.join(dir, root);
+    const noIndex = fs.existsSync(domainsRoot) ? modulesWithoutIndex(domainsRoot, extra) : [];
     if (noIndex.length) {
       console.error(
         `\n✘ ${dir}: module has no index.ts (FMA)\n${noIndex.map((d) => `  ${d}`).join('\n')}`,
@@ -168,17 +218,29 @@ export function runArchCheck({
       `${dir}: ${linter}`,
       exec(linter, ['-c', JSON.stringify(lintConfig), JSON.stringify(src)], dir, env),
     );
-    const cruiseEnv = label === 'web' ? { ...env, FMA_SRC_ROOT: 'src/app' } : env;
+    const cruiseEnv = {
+      ...env,
+      FMA_SRC_ROOT: posix(root),
+      FMA_APP: label,
+      ...(extra?.length ? { FMA_NON_DOMAINS: extra.join(',') } : {}),
+      ...(tsc ? { FMA_TSCONFIG: path.resolve(dir, tsc) } : {}),
+    };
     const cruise = exec(
       'depcruise',
       ['src', '--config', JSON.stringify(depcruiseConfig)],
       dir,
       cruiseEnv,
     );
-    if (cruise.code === 0 && parseCruisedModules(cruise.out) === 0) {
+    const cruised = parseCruisedModules(cruise.out);
+    const expected = fs.existsSync(src) ? countSourceFiles(src) : 0;
+    if (cruise.code === 0 && cruised === 0) {
       // A green result with no modules at all usually means an incompatible TypeScript or an empty src.
       cruise.code = 1;
       cruise.out = `dependency-cruiser processed 0 modules: src is empty or TypeScript is incompatible (typescript 6.x is required).\n${cruise.out}`;
+    } else if (cruise.code === 0 && cruised !== null && cruised < expected) {
+      // npx in a folder without package.json runs in the nearest parent and silently checks someone else's code.
+      cruise.code = 1;
+      cruise.out = `dependency-cruiser processed ${cruised} modules but ${dir}/src has ${expected} source files: it probably ran in another folder (add a package.json or install dependency-cruiser in this one).\n${cruise.out}`;
     }
     failed |= section(`${dir}: dependency-cruiser`, cruise);
     if (label === 'web') {
@@ -186,26 +248,35 @@ export function runArchCheck({
     }
   }
   if (!failed) console.log('arch:check: no violations');
-  return failed ? 1 : 0;
+  else if (report) console.log('\narch:check (--report): violations are listed above, exit code 0');
+  return failed && !report ? 1 : 0;
 }
 
 const isMain =
   process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (isMain) {
   const argv = process.argv.slice(2);
-  const get = (flag, fallback) => {
-    const i = argv.indexOf(flag);
-    return i >= 0 ? path.resolve(argv[i + 1]) : fallback;
-  };
-  const linterIndex = argv.indexOf('--linter');
+  const all = (flag) => argv.flatMap((a, i) => (a === flag && argv[i + 1] ? [argv[i + 1]] : []));
+  const one = (flag, fallback) => all(flag)[0] ?? fallback;
+  const file = (flag, fallback) => (one(flag) ? path.resolve(one(flag)) : fallback);
+  const servicesFile = file('--services');
   process.exit(
     runArchCheck({
-      web: get('--web'),
-      api: get('--api'),
-      linter: linterIndex >= 0 ? argv[linterIndex + 1] : 'eslint',
-      eslintConfig: get('--eslint-config', path.resolve('eslint.config.mjs')),
-      oxlintConfig: get('--oxlint-config', path.resolve('.oxlintrc.json')),
-      depcruiseConfig: get('--depcruise-config', path.resolve('.dependency-cruiser.cjs')),
+      web: file('--web'),
+      api: all('--api').map((d) => path.resolve(d)),
+      services: servicesFile ? JSON.parse(fs.readFileSync(servicesFile, 'utf8')) : [],
+      webRoot: one('--web-root'),
+      apiRoot: one('--api-root'),
+      nonDomains: (one('--non-domains', process.env.FMA_NON_DOMAINS ?? '') ?? '')
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean),
+      tsconfig: one('--tsconfig', process.env.FMA_TSCONFIG),
+      report: argv.includes('--report'),
+      linter: one('--linter', 'eslint'),
+      eslintConfig: file('--eslint-config', path.resolve('eslint.config.mjs')),
+      oxlintConfig: file('--oxlint-config', path.resolve('.oxlintrc.json')),
+      depcruiseConfig: file('--depcruise-config', path.resolve('.dependency-cruiser.cjs')),
     }),
   );
 }

@@ -19,7 +19,7 @@ The baseline profile is what a project relies on by default. The fast profile is
 
 The layers from the matrix in `SKILL.md` are concepts; the templates tell them apart in different ways. The matrix is the source of truth; check the configs against it whenever the matrix changes.
 
-The Sheriff template for Angular uses the tags `domain:<name>` (a domain and its `_submodules`), `layer:domain` (the `domain/` folder) and `kind:<segment>` (any `shared/<segment>` segment; rules are defined for `ui`, `util`, `data`). In dependency-cruiser layers are told apart by file suffixes (`.state.ts`, `.api.ts`, `.model.ts`, `.repository.ts`, `.service.ts`) and the `ui/` folder.
+The Sheriff template for Angular uses the tags `domain:<name>` (a domain and its `_submodules`), `layer:domain` (the `domain/` folder) and `kind:<segment>` (any `shared/<segment>` segment; rules are defined for `ui`, `util`, `data`). In dependency-cruiser layers are told apart by the end of the file name. NestJS: dotted suffixes (`.service.ts`, `.repository.ts`, `.controller.ts`). Angular (`arch:check` sets `FMA_APP=web` for `--web`): `-state.ts`, `-api.ts`, `-page.ts`, `-mapper.ts`, `-rules.ts` (the dotted `.state.ts` form is accepted too), and a folder of a domain without `index.ts` is a presentational component folder (`cart-badge/`). The legacy `ui/` folder is still recognized, but folders named by code type are not recommended in Angular (see `references/angular.md`).
 
 ## Tools
 
@@ -84,6 +84,19 @@ In the root `package.json` (baseline profile):
 
 For the fast profile add `--linter oxlint --oxlint-config .oxlintrc.json` (the `--eslint-config` flag is then not needed).
 
+Options for real projects:
+
+| Flag | Meaning |
+|---|---|
+| `--api <dir>` | repeatable: several NestJS services in one run |
+| `--api-root <path>` / `--web-root <path>` | domain root inside `src` (defaults `src` and `src/app`); `src/app` for `@nx/nest`, `src/app/features` for an Angular app that keeps domains in `features/` |
+| `--non-domains a,b,c` (env `FMA_NON_DOMAINS`) | root folders that are infrastructure, not domains: they need no `index.ts` and a domain may import their files directly. Recommended for Nest: `common,config,database,migrations,metrics`; add `app` (composition root) when it sits next to the domains |
+| `--tsconfig <file>` (env `FMA_TSCONFIG`) | tsconfig for alias resolution when the service has only `tsconfig.app.json`; the `paths` of a service tsconfig replace the base `paths`, so every library alias must be repeated there or the dependency stays invisible |
+| `--services <file.json>` | per-service settings: `[{ "api": "apps/catalog", "root": "src", "nonDomains": ["common"], "tsconfig": "tsconfig.app.json" }]` (`web` instead of `api` for Angular) |
+| `--report` | print every violation but exit 0, to adopt FMA gradually; drop the flag when the count reaches zero |
+
+Libraries of an Nx monorepo (`libs/shared/*`) are `shared` for FMA, not domains; they are resolved through the aliases above.
+
 Copy `arch-check.mjs` into `tools/`. The same dependency-cruiser file is used for both apps: `arch-check` runs it with the app's `cwd` and sets `FMA_SRC_ROOT=src/app` itself for Angular. The `rich` tier is detected by the config automatically: if a domain or its `_submodule` has a `domain/` folder (even an empty one), the rules `rich-model-no-repo:<module>` and `rich-model-no-orm:<module>` apply to it (for a submodule the name looks like `cart/_items`). `tsconfig` aliases (`paths`) are picked up when the app has a `tsconfig.json`.
 
 ## Pre-commit hook
@@ -130,9 +143,14 @@ During review the agent runs `arch:check` and quotes the name of the violated ru
 
 - Sheriff rejects a `tsconfig` path mapping that leads to a nonexistent folder ("invalid path mapping detected"). Add the `@shared/*` and `@contracts/*` aliases at the same moment you create the first `src/app/shared/<segment>` folder and `libs/contracts/src/<domain>`; an empty project must not have the aliases before that.
 - Contracts are checked by Sheriff: `libs/contracts/src/<name>` is a module tagged `kind:contracts` (the path is given from the root where `sheriff.config.ts` lives); contracts depend on nothing and are available to domains.
-- Layers are determined by file names (`*.service.ts`, `*.repository.ts`, `*.api.ts`, `*.state.ts`, `*.page.ts`, `ui/`). A file with another name is not covered by the layer rules.
+- Layers are determined by file names (NestJS `*.service.ts`, `*.repository.ts`; Angular `*-state.ts`, `*-api.ts`, `*-page.ts`, `*-mapper.ts`, `*-rules.ts`) and, in Angular, by component folders. A file with another name is not covered by the layer rules. A public submodule without `index.ts` would be taken for a component folder: give every module an `index.ts`.
 - `ui/` and `domain/` are recognized in a domain and at any depth of submodules; `_submodules` are recognized by the `_` prefix. A public submodule `sub/` (without `_`) has no isolation rules of its own: it is closed to neighbors by the general `no-deep-import`.
-- `modulesWithoutIndex` treats any folder at the app root, except `shared` and `contracts`, as a domain: keep infrastructure folders (`config`, `database`, `migrations`) inside `shared/` or in the `main.ts` layer.
+- `modulesWithoutIndex` and `no-deep-import` treat any folder at the domain root, except `shared`, `contracts` and the `--non-domains` list, as a domain.
+- Only one domain root per run: a project with domains in two places is described by two entries in `--services`.
+- A cross-service rule ("only RPC, HTTP, events") is not automated (see `transport.md`).
+- Cycles between entities of one domain (`A ↔ B` through `@ManyToOne`) are counted by `no-circular`; reference the entity by a string name and `import type`, or exclude `*.entity.ts` of the same domain with `from.pathNot` in the project copy of the template. The cycle check sees type-only imports (`tsPreCompilationDeps: true`).
+- `arch:check` does not see what the TypeORM CLI loads (no `tsconfig-paths`): add a test or script that loads the data source and builds the metadata.
+- `arch:check` stops when dependency-cruiser processed fewer modules than there are source files: `npx` in a folder without `package.json` runs in the nearest parent and silently checks other code.
 - Service topology rules (`apps/<service>`) are not automated (see `transport.md`).
 - Sheriff lets any domain import `layer:domain`; a neighbor's `domain/` is closed by dependency-cruiser (`no-deep-import`).
 - The `domain → contracts` and `domain → port` rows of the matrix are not checked: `libs/contracts` lies outside `src`.

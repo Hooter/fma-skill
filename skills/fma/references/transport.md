@@ -98,6 +98,8 @@ await this.tx.run(async () => {
 
 ## Monorepo layout
 
+Each service of the monorepo is a separate FMA application (`arch:check --api <dir>` is repeatable, or `--services`). Between services only RPC, HTTP or events cross the boundary; a service never imports another service's `src`, only `libs/*`. This rule is not automated.
+
 ```text
 apps/
   web/                 # Angular

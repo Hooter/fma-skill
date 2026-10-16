@@ -21,10 +21,10 @@ First find out which application you are working on: `apps/web` (Angular) or `ap
 
 | Term | Meaning | Angular | NestJS |
 |---|---|---|---|
-| `ui` | rendering and input | components | none |
-| `state` | state and commands | facade/store on signals | none |
-| `api` | the module's boundary with the outside world | `*.api.ts` (HTTP client) | `*.controller.ts`, `*.resolver.ts`, `*.consumer.ts` |
-| `model` | use cases and data | `*.model.ts` | `*.service.ts` |
+| `ui` | rendering and input | `*-page.ts`, components in folders named by subject | none |
+| `state` | state and commands | `*-state.ts`, facade/store on signals | none |
+| `api` | the module's boundary with the outside world | `*-api.ts` (HTTP client) | `*.controller.ts`, `*.resolver.ts`, `*.consumer.ts`, `*.worker.ts` (pollers and scheduled jobs) |
+| `model` | use cases and data | `*-mapper.ts`, `*-rules.ts` | `*.service.ts` |
 | `repo` | access to data and external systems | interceptors, `shared/data` | `*.repository.ts`, adapters |
 | `domain` | invariants, entities, events (`rich` only) | rarely | `domain/` |
 | `port` | interface to the outside; two kinds, see "Module communication" | `InjectionToken` | abstract class or token |
@@ -64,13 +64,15 @@ Between modules: the direction is `parent → child`; `child → parent` is forb
 - **Asynchronous:** domain events (see `references/contracts.md`).
 - **RPC/HTTP:** between processes only.
 - **UI composition:** a neighbor exposes a "showcase" (a component) through its `index.ts`; the neighbor's state is never imported.
+- A vocabulary (enum, constants, ids) used by two or more domains and holding no logic is `shared/<segment>`, not a domain. If a cycle between domains appears, first check what crosses it: often one enum or type that belongs in the owner's `types.ts`. A service whose main job is a neighbor's repository means the logic sits in the wrong domain.
 - Express a call to a neighbor through a **port** in the consumer's `ports/`; the implementation is a local `facade` or a remote client (see `references/transport.md`).
 - Two kinds of ports. A **domain port** (its signature contains domain types, for example `CartRepositoryPort`) lives in its own domain's `ports/`, and the implementation lives in that same domain. An **infrastructure port** (shared types only: event publishing, clock, mail) and its adapters live in `shared/<segment>/` and are imported as `@shared/<segment>`. `shared` does not import domains, so a `shared` adapter cannot implement a domain port.
 
 ## Files and exports
 
+- Folders and files are named by their subject, not by their code type. This is strict for Angular (the Angular Style Guide: no `ui/`, `components/`, `services/`; the layer is the end of the file name) and relaxed for NestJS, where the role folders `events/`, `ports/`, `domain/` are conventional (see `references/nestjs.md`).
 - Only `index.ts` and the public contract file are mandatory. Create the rest as needed; empty files are forbidden.
-- Move types and constants into `types.ts` / `constants.ts` when several files use them or they are part of the public API; otherwise keep them next to the code.
+- Move types and constants into `types.ts` / `constants.ts` (in Angular name the file by its subject, e.g. `cart-view.ts`) when several files use them or they are part of the public API; otherwise keep them next to the code.
 - `index.ts` contains explicit named exports only. Do not use the `export *` form (including `export * as ns`).
 - A module does not import its own `index.ts`.
 - Path aliases: `@app/<domain>`, `@contracts/<domain>`, `@shared/<segment>`. Every alias leads only to the `index.ts` of a module or segment: `@app/<domain>/<file>` and `@shared/<segment>/<file>` are forbidden. Every `shared` segment has its own `index.ts`.

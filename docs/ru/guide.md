@@ -26,7 +26,7 @@ FMA (Fractal Module Architecture) — skill для AI-агентов, работ
 - **Базовый:** ESLint, Prettier, TypeScript 6. Работает везде.
 - **Ускоренный:** oxlint, oxfmt, `tsc` 7. Подключается там, где работает.
 
-Шаблоны из `skills/fma/templates/` копируются по таблице на этой странице. `arch:check` выбирает линтер флагом `--linter eslint|oxlint`.
+Шаблоны из `skills/fma/templates/` копируются по таблице на этой странице. `arch:check` выбирает линтер флагом `--linter eslint|oxlint`. Для реальных проектов есть флаги `--api` (повторяемый), `--api-root`/`--web-root`, `--non-domains`, `--tsconfig`, `--services` и `--report` (подробно в `enforcement.md`).
 
 ## Справочники (на английском)
 

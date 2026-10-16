@@ -6,8 +6,8 @@
       "mentions": [
         "simple",
         "index.ts",
-        "catalog.state.ts",
-        "catalog.api.ts",
+        "catalog-state.ts",
+        "catalog-api.ts",
         "@contracts/catalog"
       ],
       "forbid": [
@@ -54,7 +54,7 @@
   },
   {
     "id": "ng-review-violation",
-    "prompt": "Review this code: orders.state.ts contains `import { CartState } from '@app/cart/cart.state'`.",
+    "prompt": "Review this code: orders-state.ts contains `import { CartState } from '@app/cart/cart-state'`.",
     "expect": {
       "mentions": [
         "index.ts",

@@ -35,6 +35,8 @@ A domain is a cohesive area of the product (`cart`, `orders`, `catalog`). Its co
 
 Inside a domain, each file has exactly one role, and the allowed import directions form a matrix (see the [Guide](/guide) and `SKILL.md`). The point is not the number of layers but that **the direction is fixed**: `ui` never reaches `repo`, `model` never imports `ui`. Given the matrix, "where does this code go?" has a mechanical answer.
 
+**Naming.** In Angular, FMA follows the [Angular Style Guide](https://angular.dev/style-guide): code is organized by subject, not by type, a file is named after its main identifier (`CartState` → `cart-state.ts`), and the layer is read from the end of the name (`-page`, `-state`, `-api`, `-mapper`, `-rules`). Folders named by code type (`ui/`, `components/`, `services/`) are not recommended; presentational components live in folders named by subject (`cart-badge/`). In NestJS the role folders `events/`, `ports/`, `domain/` stay conventional and the layer is carried by the suffix (`cart.service.ts`). Whether such folders are convenient in practice is still being collected from real projects.
+
 ### 3. The public entry point
 
 Everything a domain offers to neighbors is listed in one file, `index.ts` (plus the `exports` of the NestJS module). It is an explicit contract: if a symbol is not exported there, nobody outside can depend on it, so you can refactor the inside freely. Allowing only named exports (no `export *`) keeps the contract readable and reviewable.
@@ -71,7 +73,7 @@ Conventions erode unless something fails when they are broken. In FMA the matrix
 - **More files and indirection** than a plain service; the `rich` tier adds ports and mapping between entity and aggregate.
 - **Barrels cost something**: every module and shared segment needs an `index.ts`, and imports through aliases must stay shallow.
 - **Boundaries are your decision.** Wrong domain boundaries are expensive; FMA does not tell you where they go.
-- **Layers are recognized by file names** (`*.service.ts`, `*.state.ts`). A file with another name escapes the layer rules.
+- **Layers are recognized by file names** (`*.service.ts`, `*-state.ts`). A file with another name escapes the layer rules.
 - **Tooling is not trivial**: dependency-cruiser and Sheriff need TypeScript 6's API (see [Enforcement](/references/enforcement)); some service-topology rules are not automated yet.
 - **Not full DDD.** No event sourcing, no context maps or anti-corruption layers as first-class concepts.
 - **Eventual consistency** appears as soon as you use events between domains; sagas and idempotent consumers are your responsibility.
