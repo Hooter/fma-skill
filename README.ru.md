@@ -35,7 +35,7 @@ FMA (Fractal Module Architecture) — skill для AI-агентов, работ
 | `references/transport.md` | RabbitMQ/Kafka, outbox, переход к микросервисам |
 | `references/enforcement.md` | инструменты проверки, хук перед коммитом, CI, известные ограничения |
 | `references/migration.md` | переход с оригинального FDA |
-| `templates/` | конфиги ESLint, oxlint, Prettier, oxfmt, dependency-cruiser, Sheriff, lefthook, скрипт `arch-check.mjs` |
+| `templates/` | конфиги ESLint, oxlint, Prettier, oxfmt, dependency-cruiser, Sheriff, lefthook, скрипты `arch-check.mjs` и `rewrite-imports.mjs` (перенос файлов с переписыванием импортов), шаблон теста метаданных сущностей |
 | `evals/` | сценарии проверки skill и результаты прогона |
 
 ## Установка skill
@@ -57,7 +57,7 @@ pnpm validate    # структура skill
 - **Базовый:** ESLint, Prettier, TypeScript 6. Основной, работает везде.
 - **Ускоренный:** oxlint, oxfmt, `tsc` 7. Подключается там, где работает.
 
-Шаблоны из `skills/fma/templates/` копируются по таблице в `enforcement.md`. `arch:check` выбирает линтер флагом `--linter eslint|oxlint`. Для реальных проектов есть флаги `--api` (повторяемый), `--api-root`/`--web-root`, `--non-domains`, `--tsconfig`, `--services` и `--report` (подробно в `enforcement.md`).
+Шаблоны из `skills/fma/templates/` копируются по таблице в `enforcement.md`. `arch:check` выбирает линтер флагом `--linter eslint|oxlint`. Для реальных проектов есть флаги `--api` (повторяемый), `--api-root`/`--web-root`, `--non-domains`, `--infra-dirs`, `--tsconfig`, `--services` и `--report` (подробно в `enforcement.md`).
 
 TypeScript: dependency-cruiser, Sheriff и typescript-eslint требуют JS API TypeScript 6, а в TypeScript 7.0 его нет. Под именем `typescript` ставится `npm:@typescript/typescript6`, а TypeScript 7 (`tsc`) — отдельным алиасом `@typescript/native`.
 
